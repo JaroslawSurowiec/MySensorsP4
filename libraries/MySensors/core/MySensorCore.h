@@ -72,6 +72,11 @@ struct ControllerConfig {
 uint8_t getNodeId();
 
 /**
+ * Return the parent node id.
+ */
+uint8_t getParentNodeId();
+
+/**
 * Each node must present all attached sensors before any values can be handled correctly by the controller.
 * It is usually good to present all attached sensors after power-up in setup().
 *
@@ -169,6 +174,17 @@ uint8_t loadState(uint8_t pos);
 void wait(unsigned long ms);
 
 /**
+ * Wait for a specified amount of time to pass or until specified message received.  Keeps process()ing.
+ * This does not power-down the radio nor the Arduino.
+ * Because this calls process() in a loop, it is a good way to wait
+ * in your loop() on a repeater node or sensor that listens to messages.
+ * @param ms Number of milliseconds to sleep.
+ * @param cmd Command of incoming message.
+ * @param msgtype Message type.
+ */
+void wait(unsigned long ms, uint8_t cmd, uint8_t msgtype);
+
+/**
  * Sleep (PowerDownMode) the MCU and radio. Wake up on timer.
  * @param ms Number of milliseconds to sleep.
  * @return -1 if timer woke it up, -2 if not possible (e.g. ongoing FW update)
@@ -225,6 +241,8 @@ void _process(void);
 
 void _processInternalMessages();
 
+void _infiniteLoop();
+
 boolean _sendRoute(MyMessage &message);
 
 extern NodeConfig _nc;
@@ -236,6 +254,7 @@ extern MyMessage _msgTmp;  // Buffer for temporary messages (acks and nonces amo
 void receive(const MyMessage &message)  __attribute__((weak));
 void receiveTime(unsigned long)  __attribute__((weak));
 void presentation()  __attribute__((weak));
+void before() __attribute__((weak));
 void setup() __attribute__((weak));
 void loop() __attribute__((weak));
 

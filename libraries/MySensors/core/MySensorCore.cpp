@@ -51,6 +51,7 @@ void _process() {
 	#if defined(MY_RADIO_FEATURE)
 		transportProcess();
 	#endif
+	
 }
 
 #if defined(MY_RADIO_FEATURE)
@@ -59,12 +60,24 @@ static inline bool isValidParent( const uint8_t parent ) {
 }
 #endif
 
+void _infiniteLoop() {
+	while(1) {
+		#if defined(MY_GATEWAY_ESP8266)
+			yield();
+		#endif
+	}
+}
+
 void _begin() {
 	#if !defined(MY_DISABLED_SERIAL)
 	    hwInit();
 	#endif
 
-	debug(PSTR("Starting " MY_NODE_TYPE " (" MY_CAPABILIIES ", " LIBRARY_VERSION ")\n"));
+	// Call before() in sketch (if it exists)
+	if (before) 
+		before();
+
+	debug(PSTR("Starting " MY_NODE_TYPE " (" MY_CAPABILITIES ", " LIBRARY_VERSION ")\n"));
 
 	signerInit();
 
@@ -75,11 +88,7 @@ void _begin() {
 		if (!transportInit()) {
 			debug(PSTR("Radio init failed. Check wiring.\n"));
 			// Nothing more we can do
-			while(1) {
-				#if defined(MY_GATEWAY_ESP8266)
-					yield();
-				#endif
-			};
+			_infiniteLoop();
 		} else {
 			debug(PSTR("Radio init successful.\n"));
 		}
@@ -94,11 +103,7 @@ void _begin() {
 		if (!gatewayTransportInit()) {
 			debug(PSTR("Transport driver init fail\n"));
 			// Nothing more we can do
-			while(1) {
-				#if defined(MY_GATEWAY_ESP8266)
-					yield();
-				#endif
-			}
+			_infiniteLoop();
 		}
 
 	#endif
@@ -198,6 +203,10 @@ uint8_t getNodeId() {
 	return _nc.nodeId;
 }
 
+uint8_t getParentNodeId() {
+	return _nc.parentNodeId;
+}
+
 ControllerConfig getConfig() {
 	return _cc;
 }
@@ -293,25 +302,27 @@ void _processInternalMessages() {
 		}
 	} else if (type == I_HEARTBEAT) {
 		sendHeartbeat();
-	} else if (type == I_TIME && receiveTime) {
+	} else if (type == I_TIME) {
 		// Deliver time to callback
 		if (receiveTime)
 			receiveTime(_msg.getULong());
 	}
 	#if defined(MY_REPEATER_FEATURE)
-		if (type == I_CHILDREN && _msg.getString()[0] == 'C') {
-			// Clears child relay data for this node
-			debug(PSTR("clear\n"));
-			uint8_t i = 255;
-			do {
-				hwWriteConfig(EEPROM_ROUTES_ADDRESS+i, 0xff);
-			} while (i--);
-			// Clear parent node id & distance to gw
-			hwWriteConfig(EEPROM_PARENT_NODE_ID_ADDRESS, 0xFF);
-			hwWriteConfig(EEPROM_DISTANCE_ADDRESS, 0xFF);
-			// Find parent node
-			transportFindParentNode();
-			_sendRoute(build(_msg, _nc.nodeId, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL, I_CHILDREN,false).set(""));
+		if (type == I_CHILDREN) {
+			if (_msg.getString()[0] == 'C') {
+				// Clears child relay data for this node
+				debug(PSTR("clear routing table\n"));
+				uint8_t i = 255;
+				do {
+					hwWriteConfig(EEPROM_ROUTES_ADDRESS+i, BROADCAST_ADDRESS);
+				} while (i--);
+				// Clear parent node id & distance to gw
+				hwWriteConfig(EEPROM_PARENT_NODE_ID_ADDRESS, AUTO);
+				hwWriteConfig(EEPROM_DISTANCE_ADDRESS, DISTANCE_INVALID);
+				// Find parent node
+				transportFindParentNode();
+				_sendRoute(build(_msg, _nc.nodeId, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL, I_CHILDREN,false).set(""));
+			}
 		}
 	#endif
 }
@@ -334,6 +345,19 @@ void wait(unsigned long ms) {
 		#endif
 	}
 }
+
+void wait(unsigned long ms, uint8_t cmd, uint8_t msgtype) {
+	unsigned long enter = hwMillis();
+	// invalidate msg type
+	_msg.type = !msgtype;
+	while ( (hwMillis() - enter < ms) && !(mGetCommand(_msg)==cmd && _msg.type==msgtype) ) {
+		_process();
+		#if defined(MY_GATEWAY_ESP8266)
+			yield();
+		#endif
+	}
+}
+
 
 int8_t sleep(unsigned long ms) {
 	#if defined(MY_OTA_FIRMWARE_FEATURE)

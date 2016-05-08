@@ -90,20 +90,27 @@ void hwWriteConfig(int adr, uint8_t value)
 }
 
 
-
-
 int8_t hwSleep(unsigned long ms) {
 	// TODO: Not supported!
+	(void)ms;
 	return -2;
 }
 
 int8_t hwSleep(uint8_t interrupt, uint8_t mode, unsigned long ms) {
 	// TODO: Not supported!
+	(void)interrupt;
+	(void)mode;
+	(void)ms;
 	return -2;
 }
 
 int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mode2, unsigned long ms) {
-  // TODO: Not supported!
+	// TODO: Not supported!
+	(void)interrupt1;
+	(void)mode1;
+	(void)interrupt2;
+	(void)mode2;
+	(void)ms;
 	return -2;
 }
 
@@ -125,7 +132,7 @@ void hwDebugPrint(const char *fmt, ... ) {
 	#ifdef MY_GATEWAY_FEATURE
 		// prepend debug message to be handled correctly by controller (C_INTERNAL, I_LOG_MESSAGE)
 		snprintf_P(fmtBuffer, 299, PSTR("0;255;%d;0;%d;"), C_INTERNAL, I_LOG_MESSAGE);
-		Serial.print(fmtBuffer);
+		MY_SERIALDEVICE.print(fmtBuffer);
 	#endif
 	va_list args;
 	va_start (args, fmt );
@@ -139,9 +146,9 @@ void hwDebugPrint(const char *fmt, ... ) {
 		vsnprintf_P(fmtBuffer, 299, fmt, args);
 	#endif
 	va_end (args);
-	Serial.print(fmtBuffer);
-	Serial.flush();
+	MY_SERIALDEVICE.print(fmtBuffer);
+	MY_SERIALDEVICE.flush();
 
-	//Serial.write(freeRam());
+	//MY_SERIALDEVICE.write(freeRam());
 }
 #endif
