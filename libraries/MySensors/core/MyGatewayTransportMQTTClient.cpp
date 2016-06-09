@@ -59,6 +59,8 @@ MyMessage _mqttMsg;
 bool gatewayTransportSend(MyMessage &message) {
 	if (!_client.connected())
 		return false;
+    setIndication(INDICATION_GW_TX);
+
 	snprintf_P(_fmtBuffer, MY_GATEWAY_MAX_SEND_LENGTH, PSTR(MY_MQTT_PUBLISH_TOPIC_PREFIX "/%d/%d/%d/%d/%d"), message.sender, message.sensor, mGetCommand(message), mGetAck(message), message.type);
 	debug(PSTR("Sending message on topic: %s\n"), _fmtBuffer);
 	return _client.publish(_fmtBuffer, message.getString(_convBuffer));
@@ -167,6 +169,9 @@ bool gatewayTransportInit() {
   	#if defined(MY_GATEWAY_ESP8266)
 		// Turn off access point
 		WiFi.mode (WIFI_STA);
+                #if defined(MY_ESP8266_HOSTNAME)
+                        WiFi.hostname(MY_ESP8266_HOSTNAME);
+                #endif
 		(void)WiFi.begin(MY_ESP8266_SSID, MY_ESP8266_PASSWORD);
 		#ifdef MY_IP_ADDRESS
 			WiFi.config(_clientIp, _gatewayIp, _subnetIp);

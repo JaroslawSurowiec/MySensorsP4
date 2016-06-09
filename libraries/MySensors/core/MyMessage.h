@@ -66,7 +66,7 @@ typedef enum {
 	S_RAIN, // Rain sensor, V_RAIN, V_RAINRATE
 	S_UV, // Uv sensor, V_UV
 	S_WEIGHT, // Personal scale sensor, V_WEIGHT, V_IMPEDANCE
-	S_POWER, // Power meter, V_WATT, V_KWH
+	S_POWER, // Power meter, V_WATT, V_KWH, V_VAR, V_VA, V_POWER_FACTOR
 	S_HEATER, // Header device, V_HVAC_SETPOINT_HEAT, V_HVAC_FLOW_STATE, V_TEMP
 	S_DISTANCE, // Distance sensor, V_DISTANCE
 	S_LIGHT_LEVEL, // Light level sensor, V_LIGHT_LEVEL (uncalibrated in percentage),  V_LEVEL (light level in lux)
@@ -124,7 +124,11 @@ typedef enum {
 	V_HVAC_FLOW_STATE=21,  // S_HEATER, S_HVAC. HVAC flow state ("Off", "HeatOn", "CoolOn", or "AutoChangeOver") 
 	V_HVAC_SPEED, // S_HVAC, S_HEATER. HVAC/Heater fan speed ("Min", "Normal", "Max", "Auto") 
 	V_LIGHT_LEVEL, // S_LIGHT_LEVEL. Uncalibrated light level. 0-100%. Use V_LEVEL for light level in lux
-	V_VAR1, V_VAR2, V_VAR3, V_VAR4, V_VAR5,
+	V_VAR1, 
+	V_VAR2, 
+	V_VAR3, 
+	V_VAR4, 
+	V_VAR5,
 	V_UP, // S_COVER. Window covering. Up
 	V_DOWN, // S_COVER. Window covering. Down
 	V_STOP, // S_COVER. Window covering. Stop
@@ -156,34 +160,69 @@ typedef enum {
 	V_POSITION,	    // GPS position and altitude. Payload: latitude;longitude;altitude(m). E.g. "55.722526;13.017972;18"
 	V_IR_RECORD,         // Record IR codes S_IR for playback
 	V_PH, // S_WATER_QUALITY, water PH
-    	V_ORP, // S_WATER_QUALITY, water ORP : redox potential in mV
-    	V_EC,// S_WATER_QUALITY, water electric conductivity μS/cm (microSiemens/cm)
+    V_ORP, // S_WATER_QUALITY, water ORP : redox potential in mV
+    V_EC,  // S_WATER_QUALITY, water electric conductivity μS/cm (microSiemens/cm)
+    V_VAR,           // S_POWER, Reactive power: volt-ampere reactive (var)
+    V_VA,            // S_POWER, Apparent power: volt-ampere (VA)
+    V_POWER_FACTOR   // S_POWER, Ratio of real power to apparent power: floating point value in the range [-1,..,1]
 } mysensor_data;
 
 
 /// @brief Type of internal messages (for internal messages)
 typedef enum {
-	I_BATTERY_LEVEL, I_TIME, I_VERSION, I_ID_REQUEST, I_ID_RESPONSE,
-	I_INCLUSION_MODE, I_CONFIG, I_FIND_PARENT, I_FIND_PARENT_RESPONSE,
-	I_LOG_MESSAGE, I_CHILDREN, I_SKETCH_NAME, I_SKETCH_VERSION,
-	I_REBOOT, I_GATEWAY_READY,
+	I_BATTERY_LEVEL, 
+	I_TIME, 
+	I_VERSION, 
+	I_ID_REQUEST, 
+	I_ID_RESPONSE,
+	I_INCLUSION_MODE, 
+	I_CONFIG, 
+	I_FIND_PARENT, 
+	I_FIND_PARENT_RESPONSE,
+	I_LOG_MESSAGE, 
+	I_CHILDREN, 
+	I_SKETCH_NAME, 
+	I_SKETCH_VERSION,
+	I_REBOOT, 
+	I_GATEWAY_READY,
 	I_SIGNING_PRESENTATION, //!< Provides signing related preferences (first byte is preference version)
 	I_NONCE_REQUEST,        //!< Request for a nonce
 	I_NONCE_RESPONSE,       //!< Payload is nonce data
-	I_HEARTBEAT, I_PRESENTATION, I_DISCOVER, I_DISCOVER_RESPONSE, I_HEARTBEAT_RESPONSE,
-	I_LOCKED                //!< Node is locked (reason in string-payload)
+	I_HEARTBEAT, 
+	I_PRESENTATION, 
+	I_DISCOVER, 
+	I_DISCOVER_RESPONSE, 
+	I_HEARTBEAT_RESPONSE,
+	I_LOCKED,                //!< Node is locked (reason in string-payload)
+	I_PING, 				 //!< ping sent to node, payload incremental hop counter
+	I_PONG,					 //!< in return to ping, sent back to sender, payload incremental hop counter
+	I_REGISTER_REQUEST,		 //!< register request to GW
+	I_REGISTER_RESPONSE,	 //!< register response from GW
+	I_DEBUG					 //!< debug message
+	
 } mysensor_internal;
 
 
 /// @brief Type of data stream  (for streamed message)
 typedef enum {
-	ST_FIRMWARE_CONFIG_REQUEST, ST_FIRMWARE_CONFIG_RESPONSE, ST_FIRMWARE_REQUEST, ST_FIRMWARE_RESPONSE,
-	ST_SOUND, ST_IMAGE
+	ST_FIRMWARE_CONFIG_REQUEST, 
+	ST_FIRMWARE_CONFIG_RESPONSE, 
+	ST_FIRMWARE_REQUEST, 
+	ST_FIRMWARE_RESPONSE,
+	ST_SOUND, 
+	ST_IMAGE
 } mysensor_stream;
 
 /// @brief Type of payload
 typedef enum {
-	P_STRING, P_BYTE, P_INT16, P_UINT16, P_LONG32, P_ULONG32, P_CUSTOM, P_FLOAT32
+	P_STRING, 
+	P_BYTE, 
+	P_INT16, 
+	P_UINT16, 
+	P_LONG32, 
+	P_ULONG32, 
+	P_CUSTOM, 
+	P_FLOAT32
 } mysensor_payload;
 
 

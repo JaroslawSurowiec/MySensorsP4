@@ -142,6 +142,8 @@
 	#include "core/MyLeds.h"
 #endif
 
+#include "core/MyIndication.cpp"
+
 
 // INCLUSION MODE
 #if defined(MY_INCLUSION_MODE_FEATURE)
@@ -246,6 +248,7 @@
 	// FLASH
 	#ifdef MY_OTA_FIRMWARE_FEATURE
 		#include "drivers/SPIFlash/SPIFlash.cpp"
+		#include "core/MyOTAFirmwareUpdate.cpp"
 	#endif
 	#include "core/MyTransport.cpp"
 	#if (defined(MY_RADIO_NRF24) && defined(MY_RADIO_RFM69)) || (defined(MY_RADIO_NRF24) && defined(MY_RS485)) || (defined(MY_RADIO_RFM69) && defined(MY_RS485))
