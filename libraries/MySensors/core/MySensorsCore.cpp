@@ -17,7 +17,7 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#include "MySensorCore.h"
+#include "MySensorsCore.h"
 
 ControllerConfig _cc; // Configuration coming from controller
 NodeConfig _nc; // Essential settings for node to work
@@ -388,16 +388,19 @@ void wait(unsigned long ms) {
 	}
 }
 
-void wait(unsigned long ms, uint8_t cmd, uint8_t msgtype) {
+bool wait(unsigned long ms, uint8_t cmd, uint8_t msgtype) {
 	unsigned long enter = hwMillis();
 	// invalidate msg type
 	_msg.type = !msgtype;
-	while ( (hwMillis() - enter < ms) && !(mGetCommand(_msg)==cmd && _msg.type==msgtype) ) {
+	bool expectedResponse = false;
+	while ( (hwMillis() - enter < ms) && !expectedResponse ) {
 		_process();
 		#if defined(MY_GATEWAY_ESP8266)
 			yield();
 		#endif
+		expectedResponse = (mGetCommand(_msg) == cmd && _msg.type == msgtype);
 	}
+	return expectedResponse;
 }
 
 
