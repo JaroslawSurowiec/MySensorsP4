@@ -106,10 +106,10 @@ bool gatewayTransportInit() {
 			#if defined(MY_ESP8266_HOSTNAME)
 				WiFi.hostname(MY_ESP8266_HOSTNAME);
 			#endif
-			(void)WiFi.begin(MY_ESP8266_SSID, MY_ESP8266_PASSWORD);
 			#ifdef MY_IP_ADDRESS
 				WiFi.config(_ethernetGatewayIP, _gatewayIp, _subnetIp);
 			#endif
+			(void)WiFi.begin(MY_ESP8266_SSID, MY_ESP8266_PASSWORD);
 			while (WiFi.status() != WL_CONNECTED)
 			{
 				delay(500);
@@ -301,8 +301,8 @@ bool gatewayTransportAvailable()
 						inputString[i].idx = 0;
 						debug(PSTR("Client %d connected\n"), i);
 						gatewayTransportSend(buildGw(_msg, I_GATEWAY_READY).set("Gateway startup complete."));
-						if (presentation)
-							presentation();
+						// Send presentation of locally attached sensors (and node if applicable)
+						presentNode();
 					}
 				}
 				bool connected = clients[i].connected();
@@ -335,8 +335,7 @@ bool gatewayTransportAvailable()
 					_w5100_spi_en(false);
 					gatewayTransportSend(buildGw(_msg, I_GATEWAY_READY).set("Gateway startup complete."));
 					_w5100_spi_en(true);
-					if (presentation)
-						presentation();
+					presentNode();
 				}
 			}
 			if (client) {

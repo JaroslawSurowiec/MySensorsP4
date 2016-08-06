@@ -43,13 +43,13 @@
 #if defined(MY_GATEWAY_SERIAL) || defined(MY_GATEWAY_W5100) || defined(MY_GATEWAY_ENC28J60) || defined(MY_GATEWAY_ESP8266) || defined(MY_GATEWAY_MQTT_CLIENT)
 	#define MY_GATEWAY_FEATURE
 	#define MY_IS_GATEWAY (true)
-	#define MY_NODE_TYPE "gateway"
+	#define MY_NODE_TYPE "GW"
 #elif defined(MY_REPEATER_FEATURE)
 	#define MY_IS_GATEWAY (false)
-	#define MY_NODE_TYPE "repeater"
+	#define MY_NODE_TYPE "REPEATER"
 #else
 	#define MY_IS_GATEWAY (false)
-	#define MY_NODE_TYPE "sensor"
+	#define MY_NODE_TYPE "NODE"
 #endif
 
 // Enable radio "feature" if one of the radio types was enabled
@@ -255,6 +255,23 @@
 		#error Only one forward link driver can be activated
 	#endif
 	#if defined(MY_RADIO_NRF24)
+		#ifdef MY_RF24_IRQ_PIN
+			// SoftSPI does not support usingInterrupt()
+			#ifdef MY_SOFTSPI
+				#error RF24 IRQ usage cannot be used with Soft SPI
+			#endif
+			// ESP8266 does not support usingInterrupt()
+			#ifdef ESP8266
+				#error RF24 IRQ usage cannot be used with ESP8266
+			#endif
+			#ifndef SPI_HAS_TRANSACTION
+				#error RF24 IRQ usage requires transactional SPI support
+			#endif
+		#else
+			#ifdef MY_RX_MESSAGE_BUFFER_SIZE
+				#error Receive message buffering requires RF24 IRQ usage
+			#endif
+		#endif
 		#if defined(MY_RF24_ENABLE_ENCRYPTION)
 			#include "drivers/AES/AES.cpp"
 		#endif

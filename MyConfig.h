@@ -430,6 +430,22 @@
 #endif
 
 /**
+ * @def MY_RF24_IRQ_PIN
+ * @brief Disable RF24 interrupt pin usage by default. Override in sketch if needed.
+ */
+//#define MY_RF24_IRQ_PIN
+
+/**
+ * @def MY_RX_MESSAGE_BUFFER_SIZE
+ * @brief Declare the amount of incoming messages that can be buffered. Requires MY_RADIO_NRF24 and MY_RF24_IRQ_PIN. Override in sketch if needed.
+ */
+#ifdef MY_RF24_IRQ_PIN
+	#ifndef MY_RX_MESSAGE_BUFFER_SIZE
+		#define MY_RX_MESSAGE_BUFFER_SIZE  (20)
+	#endif
+#endif
+
+/**
  * @def MY_RF24_PA_LEVEL
  * @brief Default RF24 PA level. Override in sketch if needed.
  */
@@ -482,14 +498,6 @@
 #ifndef MY_RF24_ADDR_WIDTH
 #define MY_RF24_ADDR_WIDTH 5
 #endif
-
-/**
- * @def MY_RF24_SANITY_CHECK
- * @brief RF24 sanity check to verify functional RF module
- *
- * This reads back and compares configuration registers. Disable if using non-P modules
- */
-#define MY_RF24_SANITY_CHECK
 
 // Enable SOFTSPI for NRF24L01, useful for the W5100 Ethernet module
 //#define MY_SOFTSPI
@@ -702,4 +710,7 @@
 #define MY_REGISTRATION_CONTROLLER
 #define MY_DEBUG_VERBOSE_RF24
 #define MY_TRANSPORT_SANITY_CHECK
+#define MY_RF24_IRQ_PIN
+#define MY_RX_MESSAGE_BUFFER_SIZE
+#define MY_NODE_LOCK_FEATURE
 #endif

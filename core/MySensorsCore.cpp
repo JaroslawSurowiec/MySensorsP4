@@ -65,15 +65,19 @@ void _infiniteLoop() {
 }
 
 void _begin() {
+
+	if (preHwInit)
+		preHwInit();
+
 	#if !defined(MY_DISABLED_SERIAL)
-	    hwInit();
+		hwInit();
 	#endif
 
-	// Call before() in sketch (if it exists)
-	if (before) 
-		before();
+	debug(PSTR("MCO:BGN:INIT " MY_NODE_TYPE ",CP=" MY_CAPABILITIES ",VER=" MYSENSORS_LIBRARY_VERSION "\n"));
 
-	debug(PSTR("Starting " MY_NODE_TYPE " (" MY_CAPABILITIES ", " MYSENSORS_LIBRARY_VERSION ")\n"));
+	// Call before() in sketch (if it exists)
+	if (before)
+		before();
 
 	#if defined(MY_LEDS_BLINKING_FEATURE)
 		ledsInit();
@@ -82,9 +86,9 @@ void _begin() {
 	signerInit();
 
 	// Read latest received controller configuration from EEPROM
+	// Note: _cc.isMetric is bool, hence empty EEPROM (=0xFF) evaluates to true (default)
 	hwReadConfigBlock((void*)&_cc, (void*)EEPROM_CONTROLLER_CONFIG_ADDRESS, sizeof(ControllerConfig));
-	// isMetric is bool, hence empty EEPROM (=0xFF) evaluates to true
-	
+
 	#if defined(MY_OTA_FIRMWARE_FEATURE)
 		// Read firmware config from EEPROM, i.e. type, version, CRC, blocks
 		readFirmwareSettings();
@@ -94,7 +98,7 @@ void _begin() {
 		// Save static parent id in eeprom (used by bootloader)
 		hwWriteConfig(EEPROM_PARENT_NODE_ID_ADDRESS, MY_PARENT_NODE_ID);
 		transportInitialize();
-		while (!isTransportOK()) {
+		while (!isTransportReady()) {
 			hwWatchdogReset();
 			transportProcess();
 			#if defined(ARDUINO_ARCH_ESP8266)
@@ -103,7 +107,7 @@ void _begin() {
 		}
 	#endif
 
-	
+
 
 	#ifdef MY_NODE_LOCK_FEATURE
 		// Check if node has been locked down
@@ -119,7 +123,7 @@ void _begin() {
 				// Disable pullup
 				pinMode(MY_NODE_UNLOCK_PIN, INPUT);
 				setIndication(INDICATION_ERR_LOCKED);
-				debug(PSTR("Node is unlocked.\n"));
+				debug(PSTR("MCO:BGN:NODE UNLOCKED\n"));
 			} else {
 				// Disable pullup
 				pinMode(MY_NODE_UNLOCK_PIN, INPUT);
@@ -130,7 +134,7 @@ void _begin() {
 			hwWriteConfig(EEPROM_NODE_LOCK_COUNTER, MY_NODE_LOCK_COUNTER_MAX);
 		}
 	#endif
-	
+
 	#if defined(MY_GATEWAY_FEATURE)
 		#if defined(MY_INCLUSION_BUTTON_FEATURE)
 	    	inclusionInit();
@@ -139,30 +143,31 @@ void _begin() {
 	    // initialize the transport driver
 		if (!gatewayTransportInit()) {
 			setIndication(INDICATION_ERR_INIT_GWTRANSPORT);
-			debug(PSTR("Transport driver init fail\n"));
+			debug(PSTR("!MCO:BGN:TSP FAIL\n"));
 			// Nothing more we can do
 			_infiniteLoop();
 		}
-	#endif	
-	
-	// Call sketch setup
-	if (setup)
-		setup();
+	#endif
 
-	#if defined(MY_RADIO_FEATURE)
+	#if !defined(MY_GATEWAY_FEATURE)
 		presentNode();
 	#endif
-	
+
 	// register node
 	_registerNode();
 
-	debug(PSTR("Init complete, id=%d, parent=%d, distance=%d, registration=%d\n"), _nc.nodeId, _nc.parentNodeId, _nc.distance, _nodeRegistered);
+	// Call sketch setup
+	if (setup) {
+		setup();
+	}
+
+	debug(PSTR("MCO:BGN:INIT OK,ID=%d,PAR=%d,DIS=%d,REG=%d\n"), _nc.nodeId, _nc.parentNodeId, _nc.distance, _nodeRegistered);
 }
 
 
 void _registerNode() {
 	#if defined (MY_REGISTRATION_FEATURE) && !defined(MY_GATEWAY_FEATURE)
-		debug(PSTR("Request registration...\n"));	// registration request
+		debug(PSTR("MCO:REG:REQ\n"));	// registration request
 		setIndication(INDICATION_REQ_REGISTRATION);
 		_nodeRegistered = MY_REGISTRATION_DEFAULT;
 		uint8_t counter = MY_REGISTRATION_RETRIES;
@@ -171,9 +176,9 @@ void _registerNode() {
 			_sendRoute(build(_msgTmp, _nc.nodeId, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL, I_REGISTRATION_REQUEST, false).set(MY_CORE_VERSION));
 		} while (!wait(2000, C_INTERNAL, I_REGISTRATION_RESPONSE) && counter--);
 
-	#else 
+	#else
 		_nodeRegistered = true;
-		debug(PSTR("No registration required\n"));
+		debug(PSTR("MCO:REG:NOT NEEDED\n"));
 	#endif
 }
 
@@ -188,11 +193,11 @@ void presentNode() {
 			present(NODE_SENSOR_ID, S_ARDUINO_NODE);
 		#endif
 	#else
-		
+
 		#if defined(MY_OTA_FIRMWARE_FEATURE)
 				presentBootloaderInformation();
 		#endif
-		
+
 		// Send signing preferences for this node to the GW
 		signerPresentation(_msgTmp, GATEWAY_ADDRESS);
 
@@ -202,16 +207,16 @@ void presentNode() {
 		#else
 				present(NODE_SENSOR_ID, S_ARDUINO_NODE);
 		#endif
-		
+
 		// Send a configuration exchange request to controller
 		// Node sends parent node. Controller answers with latest node configuration
 		_sendRoute(build(_msgTmp, _nc.nodeId, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL, I_CONFIG, false).set(_nc.parentNodeId));
 
 		// Wait configuration reply.
 		wait(2000, C_INTERNAL, I_CONFIG);
-	
+
 	#endif
-	
+
 	if (presentation)
 		presentation();
 
@@ -255,11 +260,11 @@ bool send(MyMessage &message, bool enableAck) {
 	mSetRequestAck(message, enableAck);
 
 	#if defined(MY_REGISTRATION_FEATURE) && !defined(MY_GATEWAY_FEATURE)
-		if (_nodeRegistered) {	
+		if (_nodeRegistered) {
 			return _sendRoute(message);
 		}
 		else {
-			debug(PSTR("NODE:!REG\n"));
+			debug(PSTR("!MCO:SND:NODE NOT REG\n"));	// node not registered
 			return false;
 		}
 	#else
@@ -313,7 +318,7 @@ bool _processInternalMessages() {
 			#if defined (MY_REGISTRATION_FEATURE) && !defined(MY_GATEWAY_FEATURE)
 				_nodeRegistered = _msg.getBool();
 				setIndication(INDICATION_GOT_REGISTRATION);
-				debug(PSTR("Node registration=%d\n"), _nodeRegistered);
+				debug(PSTR("MCO:PIM:NODE REG=%d\n"), _nodeRegistered);	// node registration
 			#endif
 		}
 		else if (type == I_CONFIG) {
@@ -323,9 +328,7 @@ bool _processInternalMessages() {
 		}
 		else if (type == I_PRESENTATION) {
 			// Re-send node presentation to controller
-			#if defined(MY_RADIO_FEATURE)
-				presentNode();
-			#endif
+			presentNode();
 		}
 		else if (type == I_HEARTBEAT) {
 			sendHeartbeat();
@@ -353,7 +356,7 @@ bool _processInternalMessages() {
 					for (uint8_t cnt = 0; cnt != 255; cnt++) {
 						uint8_t route = hwReadConfig(EEPROM_ROUTES_ADDRESS + cnt);
 						if (route != BROADCAST_ADDRESS) {
-							debug(PSTR("ID: %d via %d\n"), cnt, route);
+							debug(PSTR("MCO:PIM:ROUTE N=%d,R=%d\n"), cnt, route);
 							uint8_t OutBuf[2] = { cnt,route };
 							_sendRoute(build(_msgTmp, _nc.nodeId, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL, I_DEBUG, false).set(OutBuf, 2));
 							wait(200);
@@ -379,17 +382,17 @@ bool _processInternalMessages() {
 			#endif
 		}
 		else return false;
-	} 
+	}
 	else {
 		// sender is a node
 		if (type == I_REGISTRATION_REQUEST) {
 			#if defined(MY_GATEWAY_FEATURE)
 				// register request are exclusively handled by GW/Controller
 				// !!! eventually define if AUTO ACK or register request forwarded to controller
-				#if !defined(MY_REGISTRATION_CONTROLLER) 
+				#if !defined(MY_REGISTRATION_CONTROLLER)
 					// auto register if version compatible
 					bool approveRegistration = true;
-					
+
 					#if defined(MY_CORE_COMPATIBILITY_CHECK)
 							approveRegistration = (_msg.getByte() >= MY_CORE_MIN_VERSION);
 					#endif
@@ -397,7 +400,7 @@ bool _processInternalMessages() {
 				#else
 					return false;	// processing of this request via controller
 				#endif
-			#endif	
+			#endif
 		}
 		else return false;
 	}
@@ -463,12 +466,11 @@ int8_t sleep(unsigned long ms) {
 }
 
 int8_t smartSleep(unsigned long ms) {
-	int8_t ret = sleep(ms);
-	// notifiy controller about wake up
+	// notify controller about going to sleep
 	sendHeartbeat();
 	// listen for incoming messages
 	wait(MY_SMART_SLEEP_WAIT_DURATION);
-	return ret;
+	return sleep(ms);
 }
 
 int8_t sleep(uint8_t interrupt, uint8_t mode, unsigned long ms) {
@@ -496,12 +498,11 @@ int8_t sleep(uint8_t interrupt, uint8_t mode, unsigned long ms) {
 }
 
 int8_t smartSleep(uint8_t interrupt, uint8_t mode, unsigned long ms) {
-	int8_t ret = sleep(interrupt, mode, ms);
-	// notifiy controller about wake up
+	// notify controller about going to sleep
 	sendHeartbeat();
 	// listen for incoming messages
 	wait(MY_SMART_SLEEP_WAIT_DURATION);
-	return ret;
+	return sleep(interrupt, mode, ms);
 }
 
 int8_t sleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mode2, unsigned long ms) {
@@ -531,12 +532,11 @@ int8_t sleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mode
 }
 
 int8_t smartSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mode2, unsigned long ms) {
-	int8_t ret = sleep(interrupt1, mode1, interrupt2, mode2, ms);
-	// notifiy controller about wake up
+	// notify controller about going to sleep
 	sendHeartbeat();
 	// listen for incoming messages
 	wait(MY_SMART_SLEEP_WAIT_DURATION);
-	return ret;
+	return sleep(interrupt1, mode1, interrupt2, mode2, ms);
 }
 
 #ifdef MY_NODE_LOCK_FEATURE
@@ -545,7 +545,7 @@ void nodeLock(const char* str) {
 	hwWriteConfig(EEPROM_NODE_LOCK_COUNTER, 0);
 	while (1) {
 		setIndication(INDICATION_ERR_LOCKED);
-		debug(PSTR("Node is locked. Ground pin %d and reset to unlock.\n"), MY_NODE_UNLOCK_PIN);
+		debug(PSTR("MCO:NLK:NODE LOCKED. TO UNLOCK, GND PIN %d AND RESET\n"), MY_NODE_UNLOCK_PIN);
 		#if defined(ARDUINO_ARCH_ESP8266)
 			yield();
 		#endif
@@ -559,4 +559,3 @@ void nodeLock(const char* str) {
 	}
 }
 #endif
-
