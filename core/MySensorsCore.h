@@ -33,13 +33,15 @@
  *  - MCO:<b>REG</b>	from @ref _registerNode()
  *  - MCO:<b>SND</b>	from @ref send()
  *  - MCO:<b>PIM</b>	from @ref _processInternalMessages()
- *  - MCO:<b>NLK</b>	from @ref nodeLock()
+ *  - MCO:<b>NLK</b>	from nodeLock()
  *
  * MySensorsCore debug log messages:
  *
  * |E| SYS	| SUB	| Message									| Comment
  * |-|------|-------|-------------------------------------------|----------------------------------------------------------------------------
  * | | MCO  | BGN	| INIT %%s,CP=%%s,LIB=%%s					| Core initialization, capabilities (CP), library version (VER)
+ * | | MCO  | BGN	| BFR										| Callback before()
+ * | | MCO  | BGN	| STP										| Callback setup()
  * | | MCO	| BGN	| INIT OK,ID=%%d,PAR=%%d,DIS=%%d,REG=%%d	| Core initialized, parent ID (PAR), distance to GW (DIS), registration (REG)
  * | | MCO	| BGN	| NODE UNLOCKED								| Node successfully unlocked (see signing chapter)
  * |!| MCO	| BGN	| TSP FAIL									| Transport initialization failed
