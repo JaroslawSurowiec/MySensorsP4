@@ -84,16 +84,11 @@
 	#define MY_DEFAULT_RX_LED_PIN MY_HW_TX_LED_PIN
 #endif
 
-// Not necessary to include blinking feature if no LED's are defined!
-#if defined(MY_LEDS_BLINKING_FEATURE) && !defined(MY_DEFAULT_RX_LED_PIN) && !defined(MY_DEFAULT_TX_LED_PIN) && !defined(MY_ERR_LED_PIN)
-	#undef MY_LEDS_BLINKING_FEATURE
+#if defined(MY_LEDS_BLINKING_FEATURE)
+#error MY_LEDS_BLINKING_FEATURE is now removed from MySensors core,\
+       define MY_DEFAULT_ERR_LED_PIN, MY_DEFAULT_TX_LED_PIN or\
+       MY_DEFAULT_RX_LED_PIN in your sketch instead to enable LEDs
 #endif
-
-// Enable LED BLINKING FEATURE, if there are any LEDs defined.
-#if defined(MY_DEFAULT_RX_LED_PIN) || defined(MY_DEFAULT_ERR_LED) || defined(MY_DEFAULT_TX_LED_PIN)
-	#define MY_LEDS_BLINKING_FEATURE
-#endif
-
 
 /**
  * @def MY_DEFAULT_LED_BLINK_PERIOD
@@ -102,41 +97,8 @@
 #ifndef MY_DEFAULT_LED_BLINK_PERIOD
 #define MY_DEFAULT_LED_BLINK_PERIOD 300
 #endif
-/**
- * @def MY_DEFAULT_RX_LED_PIN
- * @brief The RX LED default pin.
- */
-#ifndef MY_DEFAULT_RX_LED_PIN
-	#if defined(ARDUINO_ARCH_ESP8266)
-		#define MY_DEFAULT_RX_LED_PIN 8
-	#else
-		#define MY_DEFAULT_RX_LED_PIN 6
-	#endif
-#endif
-/**
- * @def MY_DEFAULT_TX_LED_PIN
- * @brief The TX LED default pin.
- */
-#ifndef MY_DEFAULT_TX_LED_PIN
-	#if defined(ARDUINO_ARCH_ESP8266)
-		#define MY_DEFAULT_TX_LED_PIN 9
-	#else
-		#define MY_DEFAULT_TX_LED_PIN 5
-	#endif
-#endif
-/**
- * @def MY_DEFAULT_ERR_LED_PIN
- * @brief The Error LED default pin.
- */
-#ifndef MY_DEFAULT_ERR_LED_PIN
-	#if defined(ARDUINO_ARCH_ESP8266)
-		#define MY_DEFAULT_ERR_LED_PIN 7
-	#else
-		#define MY_DEFAULT_ERR_LED_PIN 4
-	#endif
-#endif
 
-#if defined(MY_LEDS_BLINKING_FEATURE)
+#if defined(MY_DEFAULT_RX_LED_PIN) || defined(MY_DEFAULT_TX_LED_PIN) || defined(MY_DEFAULT_ERR_LED_PIN)
 	#include "core/MyLeds.cpp"
 #else
 	#include "core/MyLeds.h"
@@ -270,7 +232,7 @@
 #endif
 
 #if defined(MY_PARENT_NODE_IS_STATIC) && (MY_PARENT_NODE_ID == AUTO)
-	#error Parent is static but no parent ID defined. 
+	#error Parent is static but no parent ID defined.
 #endif
 
 // Make sure to disable child features when parent feature is disabled
@@ -311,4 +273,5 @@
 // This is used to enable disabled macros/definitions to be included in the documentation as well.
 #if DOXYGEN
 #define MY_GATEWAY_FEATURE
+#define MY_LEDS_BLINKING_FEATURE //!< \deprecated use MY_DEFAULT_RX_LED_PIN, MY_DEFAULT_TX_LED_PIN and/or MY_DEFAULT_ERR_LED_PIN instead **** DEPRECATED, DO NOT USE ****
 #endif
