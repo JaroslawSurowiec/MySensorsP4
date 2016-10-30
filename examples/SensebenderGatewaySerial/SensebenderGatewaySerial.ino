@@ -22,21 +22,21 @@
  * The ArduinoGateway prints data received from sensors on the serial link.
  * The gateway accepts input on seral which will be sent out on radio network.
  *
- * This GW code is designed for Sensebender GateWay / Arduino Zero
+ * This GW code is designed for Sensebender GateWay / (Arduino Zero variant)
  *
  * Wire connections (OPTIONAL):
- * - Inclusion button should be connected between digital pin 3 and GND
- * - RX/TX/ERR leds need to be connected between +5V (anode) and digital pin 6/5/4 with resistor 270-330R in a series
+ * - Inclusion button should be connected to SW2
  *
- * LEDs (OPTIONAL):
- * - To use the feature, uncomment any of the MY_DEFAULT_xx_LED_PINs
- * - RX (green) - blink fast on radio message recieved. In inclusion mode will blink fast only on presentation recieved
- * - TX (yellow) - blink fast on radio message transmitted. In inclusion mode will blink slowly
- * - ERR (red) - fast blink on error during transmission error or recieve crc error
+ * LEDs on board (default assignments):
+ * - Orange: USB RX/TX - Blink when receiving / transmitting on USB CDC device
+ * - Yellow: RX  - Blink fast on radio message recieved. In inclusion mode will blink fast only on presentation recieved
+ * - Green : TX  - Blink fast on radio message transmitted. In inclusion mode will blink slowly
+ * - Red   : ERR - Fast blink on error during transmission error or recieve crc error
+ * - Blue  : free - (use with LED_BLUE macro)
  *
  */
 
-#define SKETCH_VERSION "0.1"
+#define SKETCH_VERSION "0.2"
 // Enable debug prints to serial monitor
 #define MY_DEBUG
 
@@ -124,6 +124,7 @@ void preHwInit() {
       delay(500);
     } // Wait for USB to be connected, before spewing out data.
   }
+  digitalWrite(LED_BLUE, LOW);
   if (Serial) {
     Serial.println("Sensebender GateWay test routine");
     Serial.print("Mysensors core version : ");
@@ -146,7 +147,11 @@ void preHwInit() {
     digitalWrite(LED_ORANGE, HIGH);
     tests++;
   }
-  if (tests == 3) {
+  if (testAnalog()) {
+    digitalWrite(LED_BLUE, HIGH);
+    tests++;
+  }
+  if (tests == 4) {
     while(1) {
       for (int i=0; i<num_of_leds; i++) {
         digitalWrite(leds[i], HIGH);
@@ -248,4 +253,16 @@ bool testEEProm() {
   }
   SerialUSB.println("FAILED!");
   return false;
+}
+
+bool testAnalog() {
+  int bat_detect = analogRead(MY_BAT_DETECT);
+  Serial.print("-> analog : ");
+  Serial.print(bat_detect);
+  if (bat_detect < 400 || bat_detect > 650) {
+    Serial.println(" Failed");
+    return false;
+  }
+  Serial.println(" Passed");
+  return true;
 }

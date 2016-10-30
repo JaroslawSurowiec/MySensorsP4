@@ -57,19 +57,14 @@
 #include "MyTransport.h"
 #include <stdint.h>
 
-
-#if defined(ARDUINO) && ARDUINO >= 100
 #include <Arduino.h>
-#else
-#include <WProgram.h>
-#endif
 
 #include "MyTransport.h"
 
 
 #if defined(MY_RS485_DE_PIN)
-	#define assertDE() digitalWrite(MY_RS485_DE_PIN, HIGH); delayMicroseconds(5)
-	#define deassertDE() digitalWrite(MY_RS485_DE_PIN, LOW)
+	#define assertDE() hwDigitalWrite(MY_RS485_DE_PIN, HIGH); delayMicroseconds(5)
+	#define deassertDE() hwDigitalWrite(MY_RS485_DE_PIN, LOW)
 
 #else
 	#define assertDE()
@@ -130,7 +125,9 @@ bool _serialProcess()
 {
     char inch;
     unsigned char i;
-    if (!_dev.available()) return false;
+    if (!_dev.available()) {
+			return false;
+		}
 
     while(_dev.available()) {
         inch = _dev.read();
@@ -263,12 +260,14 @@ bool transportSend(uint8_t to, const void* data, uint8_t len)
 	}
 
 	#if defined(MY_RS485_DE_PIN)
-		digitalWrite(MY_RS485_DE_PIN, HIGH);
+		hwDigitalWrite(MY_RS485_DE_PIN, HIGH);
 		delayMicroseconds(5);
 	#endif
 
 		// Start of header by writing multiple SOH
-    for(byte w=0;w<1;w++)  _dev.write(SOH);
+    for(byte w=0;w<1;w++) {
+			_dev.write(SOH);
+		}
     _dev.write(to);  // Destination address
     cs += to;
     _dev.write(_nodeId); // Source address
@@ -305,7 +304,7 @@ bool transportSend(uint8_t to, const void* data, uint8_t len)
 			#endif
 			#endif
 		#endif
-		digitalWrite(MY_RS485_DE_PIN, LOW);
+		hwDigitalWrite(MY_RS485_DE_PIN, LOW);
 	#endif
     return true;
 }
@@ -317,8 +316,8 @@ bool transportInit() {
 	_dev.begin(MY_RS485_BAUD_RATE);
     _serialReset();
 	#if defined(MY_RS485_DE_PIN)
-    	pinMode(MY_RS485_DE_PIN, OUTPUT);
-        digitalWrite(MY_RS485_DE_PIN, LOW);
+    	hwPinMode(MY_RS485_DE_PIN, OUTPUT);
+        hwDigitalWrite(MY_RS485_DE_PIN, LOW);
 	#endif
     return true;
 }
@@ -356,5 +355,3 @@ uint8_t transportReceive(void* data) {
 void transportPowerDown() {
 	// Nothing to shut down here
 }
-
-

@@ -21,7 +21,7 @@
 
 #include "MyHwATMega328.h"
 
-#define INVALID_INTERRUPT_NUM  (0xFFu)
+#define INVALID_INTERRUPT_NUM	(0xFFu)
 
 volatile uint8_t _wokeUpByInterrupt = INVALID_INTERRUPT_NUM;    // Interrupt number that woke the mcu.
 volatile uint8_t _wakeUp1Interrupt  = INVALID_INTERRUPT_NUM;    // Interrupt number for wakeUp1-callback.
@@ -30,11 +30,19 @@ volatile uint8_t _wakeUp2Interrupt  = INVALID_INTERRUPT_NUM;    // Interrupt num
 void wakeUp1()	 //place to send the interrupts
 {
 	detachInterrupt(_wakeUp1Interrupt);
+	if (_wakeUp2Interrupt != INVALID_INTERRUPT_NUM)
+    {
+        detachInterrupt(_wakeUp2Interrupt);
+    }
 	_wokeUpByInterrupt = _wakeUp1Interrupt;
 }
 void wakeUp2()	 //place to send the second interrupts
 {
 	detachInterrupt(_wakeUp2Interrupt);
+	if (_wakeUp1Interrupt != INVALID_INTERRUPT_NUM)
+    {
+        detachInterrupt(_wakeUp1Interrupt);
+    }
 	_wokeUpByInterrupt = _wakeUp2Interrupt;
 }
 
@@ -73,7 +81,7 @@ void hwPowerDown(period_t period) {
 	sei();
     // Directly sleep CPU, to prevent race conditions! (see chapter 7.7 of ATMega328P datasheet)
 	sleep_cpu();
-    sleep_disable();	
+    sleep_disable();
 	// restore previous WDT settings
 	cli();
 	wdt_reset();
@@ -105,7 +113,7 @@ void hwInternalSleep(unsigned long ms) {
 
 int8_t hwSleep(unsigned long ms) {
 	hwInternalSleep(ms);
-	return -1;
+	return MY_WAKE_UP_BY_TIMER;
 }
 
 int8_t hwSleep(uint8_t interrupt, uint8_t mode, unsigned long ms) {
@@ -116,12 +124,16 @@ int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mo
     // Disable interrupts until going to sleep, otherwise interrupts occurring between attachInterrupt()
     // and sleep might cause the ATMega to not wakeup from sleep as interrupt has already be handled!
 	cli();
-	// attach interrupts 
+	// attach interrupts
     _wakeUp1Interrupt  = interrupt1;
     _wakeUp2Interrupt  = interrupt2;
-    if (interrupt1 != INVALID_INTERRUPT_NUM) attachInterrupt(interrupt1, wakeUp1, mode1);
-	if (interrupt2 != INVALID_INTERRUPT_NUM) attachInterrupt(interrupt2, wakeUp2, mode2);
-	
+    if (interrupt1 != INVALID_INTERRUPT_NUM) {
+			attachInterrupt(interrupt1, wakeUp1, mode1);
+		}
+	if (interrupt2 != INVALID_INTERRUPT_NUM) {
+		attachInterrupt(interrupt2, wakeUp2, mode2);
+	}
+
 	if (ms>0) {
 		// sleep for defined time
 		hwInternalSleep(ms);
@@ -129,19 +141,29 @@ int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mo
 		// sleep until ext interrupt triggered
     	hwPowerDown(SLEEP_FOREVER);
 	}
-	
-    // Return what woke the mcu.
-    int ret = -1;       // default: no interrupt triggered, timer wake up	
-    if (interruptWakeUp()) ret = static_cast<int8_t>(_wokeUpByInterrupt);
 
+    // Assure any interrupts attached, will get detached when they did not occur.
+    if (interrupt1 != INVALID_INTERRUPT_NUM) {
+			detachInterrupt(interrupt1);
+		}
+	if (interrupt2 != INVALID_INTERRUPT_NUM) {
+		detachInterrupt(interrupt2);
+	}
+
+    // Return what woke the mcu.
+    int8_t ret = MY_WAKE_UP_BY_TIMER;       // default: no interrupt triggered, timer wake up
+    if (interruptWakeUp()) {
+			ret = static_cast<int8_t>(_wokeUpByInterrupt);
+		}
     // Clear woke-up-by-interrupt flag, so next sleeps won't return immediately.
     _wokeUpByInterrupt = INVALID_INTERRUPT_NUM;
 
 	return ret;
 }
 
+#if defined(MY_DEBUG) || defined(MY_SPECIAL_DEBUG)
 uint16_t hwCPUVoltage() {
-	// Measure Vcc against 1.1V Vref 
+	// Measure Vcc against 1.1V Vref
 	#if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 		ADMUX = (_BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1));
 	#elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
@@ -150,12 +172,12 @@ uint16_t hwCPUVoltage() {
 		ADMUX = (_BV(MUX3) | _BV(MUX2));
 	#else
 		ADMUX = (_BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1));
-	#endif 
+	#endif
 	// Vref settle
-	delay(70); 
+	delay(70);
 	// Do conversion
 	ADCSRA |= _BV(ADSC);
-	while (bit_is_set(ADCSRA,ADSC));
+	while (bit_is_set(ADCSRA,ADSC)) {};
 	// return Vcc in mV
 	return (1125300UL) / ADC;
 }
@@ -163,8 +185,8 @@ uint16_t hwCPUVoltage() {
 uint16_t hwCPUFrequency() {
 	cli();
 	// setup timer1
-	TIFR1 = 0xFF;   
-	TCNT1 = 0; 
+	TIFR1 = 0xFF;
+	TCNT1 = 0;
 	TCCR1A = 0;
 	TCCR1C = 0;
 	// save WDT settings
@@ -174,27 +196,26 @@ uint16_t hwCPUFrequency() {
 	WDTCSR |= (1 << WDIE);
 	wdt_reset();
 	// start timer1 with 1024 prescaling
-	TCCR1B = _BV(CS12) | _BV(CS10);   
+	TCCR1B = _BV(CS12) | _BV(CS10);
 	// wait until wdt interrupt
-	while (bit_is_clear(WDTCSR,WDIF));
+	while (bit_is_clear(WDTCSR,WDIF)) {};
 	// stop timer
 	TCCR1B = 0;
 	// restore WDT settings
 	wdt_reset();
 	WDTCSR |= (1 << WDCE) | (1 << WDE);
 	WDTCSR = WDTsave;
-	sei();	
+	sei();
 	// return frequency in 1/10MHz (accuracy +- 10%)
 	return TCNT1 * 2048UL / 100000UL;
 }
 
 uint16_t hwFreeMem() {
-	extern int __heap_start, *__brkval; 
-	int v; 
-	return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+	extern int __heap_start, *__brkval;
+	int v;
+	return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
 }
-
-
+#endif
 
 #ifdef MY_DEBUG
 void hwDebugPrint(const char *fmt, ... ) {
@@ -203,6 +224,10 @@ void hwDebugPrint(const char *fmt, ... ) {
 		// prepend debug message to be handled correctly by controller (C_INTERNAL, I_LOG_MESSAGE)
 		snprintf_P(fmtBuffer, sizeof(fmtBuffer), PSTR("0;255;%d;0;%d;"), C_INTERNAL, I_LOG_MESSAGE);
 		MY_SERIALDEVICE.print(fmtBuffer);
+	#else
+		// prepend timestamp (AVR nodes)
+		MY_SERIALDEVICE.print(hwMillis());
+		MY_SERIALDEVICE.print(" ");
 	#endif
 	va_list args;
 	va_start (args, fmt );

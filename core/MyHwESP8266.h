@@ -33,9 +33,16 @@
 
 
 // Define these as macros to save valuable space
+#define hwDigitalWrite(__pin, __value) digitalWrite(__pin, __value)
+#define hwDigitalRead(__pin) digitalRead(__pin)
+#define hwPinMode(__pin, __value) pinMode(__pin, __value)
 
-#define hwDigitalWrite(__pin, __value) (digitalWrite(__pin, __value))
-#define hwInit() MY_SERIALDEVICE.begin(MY_BAUD_RATE); MY_SERIALDEVICE.setDebugOutput(true)
+#if defined(MY_DISABLED_SERIAL)
+	#define hwInit()
+#else
+	#define hwInit() MY_SERIALDEVICE.begin(MY_BAUD_RATE, SERIAL_8N1, MY_ESP8266_SERIAL_MODE, 1); MY_SERIALDEVICE.setDebugOutput(true)
+#endif
+
 #define hwWatchdogReset() wdt_reset()
 #define hwReboot() ESP.restart()
 #define hwMillis() millis()
