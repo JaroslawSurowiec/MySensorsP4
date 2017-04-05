@@ -6,7 +6,7 @@
  * network topology allowing messages to be routed to nodes.
  *
  * Created by Henrik Ekblad <henrik.ekblad@mysensors.org>
- * Copyright (C) 2013-2015 Sensnology AB
+ * Copyright (C) 2013-2017 Sensnology AB
  * Full contributor list: https://github.com/mysensors/Arduino/graphs/contributors
  *
  * Documentation: http://www.mysensors.org
@@ -17,39 +17,58 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifdef ARDUINO_ARCH_AVR
-
 #include "MyHwAVR.h"
 
+bool hwInit(void)
+{
+#if !defined(MY_DISABLED_SERIAL)
+	MY_SERIALDEVICE.begin(MY_BAUD_RATE);
+#endif
+	return true;
+}
+
+#define WDTO_SLEEP_FOREVER		(0xFFu)
 #define INVALID_INTERRUPT_NUM	(0xFFu)
 
 volatile uint8_t _wokeUpByInterrupt =
-    INVALID_INTERRUPT_NUM;    // Interrupt number that woke the mcu.
+	INVALID_INTERRUPT_NUM;    // Interrupt number that woke the mcu.
 volatile uint8_t _wakeUp1Interrupt  =
-    INVALID_INTERRUPT_NUM;    // Interrupt number for wakeUp1-callback.
+	INVALID_INTERRUPT_NUM;    // Interrupt number for wakeUp1-callback.
 volatile uint8_t _wakeUp2Interrupt  =
-    INVALID_INTERRUPT_NUM;    // Interrupt number for wakeUp2-callback.
+	INVALID_INTERRUPT_NUM;    // Interrupt number for wakeUp2-callback.
 
-void wakeUp1()	 //place to send the interrupts
+void wakeUp1()
 {
+	// Disable sleep. When an interrupt occurs after attachInterrupt,
+	// but before sleeping the CPU would not wake up.
+	// Ref: http://playground.arduino.cc/Learning/ArduinoSleepCode
+	sleep_disable();
 	detachInterrupt(_wakeUp1Interrupt);
-	if (_wakeUp2Interrupt != INVALID_INTERRUPT_NUM) {
-		detachInterrupt(_wakeUp2Interrupt);
+	// First interrupt occurred will be reported only
+	if (INVALID_INTERRUPT_NUM == _wokeUpByInterrupt)
+	{
+		_wokeUpByInterrupt = _wakeUp1Interrupt;
 	}
-	_wokeUpByInterrupt = _wakeUp1Interrupt;
 }
-void wakeUp2()	 //place to send the second interrupts
+void wakeUp2()
 {
+	sleep_disable();
 	detachInterrupt(_wakeUp2Interrupt);
-	if (_wakeUp1Interrupt != INVALID_INTERRUPT_NUM) {
-		detachInterrupt(_wakeUp1Interrupt);
+	// First interrupt occurred will be reported only
+	if (INVALID_INTERRUPT_NUM == _wokeUpByInterrupt)
+	{
+		_wokeUpByInterrupt = _wakeUp2Interrupt;
 	}
-	_wokeUpByInterrupt = _wakeUp2Interrupt;
 }
 
-bool interruptWakeUp()
+inline bool interruptWakeUp()
 {
 	return _wokeUpByInterrupt != INVALID_INTERRUPT_NUM;
+}
+
+void clearPendingInterrupt(const uint8_t interrupt)
+{
+	EIFR = _BV(interrupt);
 }
 
 // Watchdog Timer interrupt service routine. This routine is required
@@ -58,14 +77,19 @@ ISR (WDT_vect)
 {
 }
 
-void hwPowerDown(period_t period)
+void hwPowerDown(const uint8_t wdto)
 {
+	// Let serial prints finish (debug, log etc)
+#ifndef MY_DISABLED_SERIAL
+	MY_SERIALDEVICE.flush();
+#endif
+
 	// disable ADC for power saving
 	ADCSRA &= ~(1 << ADEN);
 	// save WDT settings
 	uint8_t WDTsave = WDTCSR;
-	if (period != SLEEP_FOREVER) {
-		wdt_enable(period);
+	if (wdto != WDTO_SLEEP_FOREVER) {
+		wdt_enable(wdto);
 		// enable WDT interrupt before system reset
 		WDTCSR |= (1 << WDCE) | (1 << WDIE);
 	} else {
@@ -80,7 +104,8 @@ void hwPowerDown(period_t period)
 #endif
 	// Enable interrupts & sleep until WDT or ext. interrupt
 	sei();
-	// Directly sleep CPU, to prevent race conditions! (see chapter 7.7 of ATMega328P datasheet)
+	// Directly sleep CPU, to prevent race conditions!
+	// Ref: chapter 7.7 of ATMega328P datasheet
 	sleep_cpu();
 	sleep_disable();
 	// restore previous WDT settings
@@ -97,49 +122,20 @@ void hwPowerDown(period_t period)
 
 void hwInternalSleep(unsigned long ms)
 {
-	// Let serial prints finish (debug, log etc)
-#ifndef MY_DISABLED_SERIAL
-	MY_SERIALDEVICE.flush();
-#endif
-	while (!interruptWakeUp() && ms >= 8000) {
-		hwPowerDown(SLEEP_8S);
-		ms -= 8000;
-	}
-	if (!interruptWakeUp() && ms >= 4000)    {
-		hwPowerDown(SLEEP_4S);
-		ms -= 4000;
-	}
-	if (!interruptWakeUp() && ms >= 2000)    {
-		hwPowerDown(SLEEP_2S);
-		ms -= 2000;
-	}
-	if (!interruptWakeUp() && ms >= 1000)    {
-		hwPowerDown(SLEEP_1S);
-		ms -= 1000;
-	}
-	if (!interruptWakeUp() && ms >= 500)     {
-		hwPowerDown(SLEEP_500MS);
-		ms -= 500;
-	}
-	if (!interruptWakeUp() && ms >= 250)     {
-		hwPowerDown(SLEEP_250MS);
-		ms -= 250;
-	}
-	if (!interruptWakeUp() && ms >= 125)     {
-		hwPowerDown(SLEEP_120MS);
-		ms -= 120;
-	}
-	if (!interruptWakeUp() && ms >= 64)      {
-		hwPowerDown(SLEEP_60MS);
-		ms -= 60;
-	}
-	if (!interruptWakeUp() && ms >= 32)      {
-		hwPowerDown(SLEEP_30MS);
-		ms -= 30;
-	}
-	if (!interruptWakeUp() && ms >= 16)      {
-		hwPowerDown(SLEEP_15MS);
-		ms -= 15;
+	// Sleeping with watchdog only supports multiples of 16ms.
+	// Round up to next multiple of 16ms, to assure we sleep at least the
+	// requested amount of time. Sleep of 0ms will not sleep at all!
+	ms += 15u;
+
+	while (!interruptWakeUp() && ms >= 16) {
+		for (uint8_t period = 9u; ;--period) {
+			const uint16_t comparatorMS = 1 << (period + 4);
+			if ( ms >= comparatorMS) {
+				hwPowerDown(period); // 8192ms => 9, 16ms => 0
+				ms -= comparatorMS;
+				break;
+			}
+		}
 	}
 }
 
@@ -155,27 +151,37 @@ int8_t hwSleep(uint8_t interrupt, uint8_t mode, unsigned long ms)
 }
 
 int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mode2,
-               unsigned long ms)
+							 unsigned long ms)
 {
+	// ATMega328P supports following modes to wake from sleep: LOW, CHANGE, RISING, FALLING
+	// Datasheet states only LOW can be used with INT0/1 to wake from sleep, which is incorrect.
+	// Ref: http://gammon.com.au/interrupts
+
 	// Disable interrupts until going to sleep, otherwise interrupts occurring between attachInterrupt()
 	// and sleep might cause the ATMega to not wakeup from sleep as interrupt has already be handled!
 	cli();
 	// attach interrupts
 	_wakeUp1Interrupt  = interrupt1;
 	_wakeUp2Interrupt  = interrupt2;
+
+	// Attach external interrupt handlers, and clear any pending interrupt flag
+	// to prevent waking immediately again.
+	// Ref: https://forum.arduino.cc/index.php?topic=59217.0
 	if (interrupt1 != INVALID_INTERRUPT_NUM) {
+		clearPendingInterrupt(interrupt1);
 		attachInterrupt(interrupt1, wakeUp1, mode1);
 	}
 	if (interrupt2 != INVALID_INTERRUPT_NUM) {
+		clearPendingInterrupt(interrupt2);
 		attachInterrupt(interrupt2, wakeUp2, mode2);
 	}
 
-	if (ms>0) {
+	if (ms > 0u) {
 		// sleep for defined time
 		hwInternalSleep(ms);
 	} else {
 		// sleep until ext interrupt triggered
-		hwPowerDown(SLEEP_FOREVER);
+		hwPowerDown(WDTO_SLEEP_FOREVER);
 	}
 
 	// Assure any interrupts attached, will get detached when they did not occur.
@@ -187,7 +193,8 @@ int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mo
 	}
 
 	// Return what woke the mcu.
-	int8_t ret = MY_WAKE_UP_BY_TIMER;       // default: no interrupt triggered, timer wake up
+		// Default: no interrupt triggered, timer wake up
+	int8_t ret = MY_WAKE_UP_BY_TIMER;
 	if (interruptWakeUp()) {
 		ret = static_cast<int8_t>(_wokeUpByInterrupt);
 	}
@@ -197,14 +204,13 @@ int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mo
 	return ret;
 }
 
-
 bool hwUniqueID(unique_id_t* uniqueID)
 {
 	// not implemented yet
 	(void)uniqueID;
 	return false;
 }
-#if defined(MY_DEBUG) || defined(MY_SPECIAL_DEBUG)
+
 uint16_t hwCPUVoltage()
 {
 	// Measure Vcc against 1.1V Vref
@@ -261,20 +267,19 @@ uint16_t hwFreeMem()
 	int v;
 	return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
 }
-#endif
 
-#ifdef MY_DEBUG
 void hwDebugPrint(const char *fmt, ... )
 {
 	char fmtBuffer[MY_SERIAL_OUTPUT_SIZE];
 #ifdef MY_GATEWAY_FEATURE
 	// prepend debug message to be handled correctly by controller (C_INTERNAL, I_LOG_MESSAGE)
-	snprintf_P(fmtBuffer, sizeof(fmtBuffer), PSTR("0;255;%d;0;%d;"), C_INTERNAL, I_LOG_MESSAGE);
+	snprintf_P(fmtBuffer, sizeof(fmtBuffer), PSTR("0;255;%d;0;%d;%lu "),
+				C_INTERNAL, I_LOG_MESSAGE, hwMillis());
 	MY_SERIALDEVICE.print(fmtBuffer);
 #else
-	// prepend timestamp (AVR nodes)
+	// prepend timestamp
 	MY_SERIALDEVICE.print(hwMillis());
-	MY_SERIALDEVICE.print(" ");
+	MY_SERIALDEVICE.print(F(" "));
 #endif
 	va_list args;
 	va_start (args, fmt );
@@ -289,9 +294,4 @@ void hwDebugPrint(const char *fmt, ... )
 	va_end (args);
 	MY_SERIALDEVICE.print(fmtBuffer);
 	MY_SERIALDEVICE.flush();
-
-	//MY_SERIALDEVICE.write(freeRam());
 }
-#endif
-
-#endif // #ifdef ARDUINO_ARCH_AVR

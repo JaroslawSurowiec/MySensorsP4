@@ -6,7 +6,7 @@
  * network topology allowing messages to be routed to nodes.
  *
  * Created by Henrik Ekblad <henrik.ekblad@mysensors.org>
- * Copyright (C) 2013-2015 Sensnology AB
+ * Copyright (C) 2013-2017 Sensnology AB
  * Full contributor list: https://github.com/mysensors/Arduino/graphs/contributors
  *
  * Documentation: http://www.mysensors.org
@@ -53,13 +53,7 @@
 // Serial Transport
 
 
-#include "MyConfig.h"
-#include "MyTransport.h"
-#include <stdint.h>
-
-#include <Arduino.h>
-
-#include "MyTransport.h"
+#include "MyTransportHAL.h"
 
 #ifdef __linux__
 #include "SerialPort.h"
@@ -239,8 +233,9 @@ bool _serialProcess()
 	return true;
 }
 
-bool transportSend(const uint8_t to, const void* data, const uint8_t len)
+bool transportSend(const uint8_t to, const void* data, const uint8_t len, const bool noACK)
 {
+	(void)noACK;	// not implemented
 	const char *datap = static_cast<char const *>(data);
 	unsigned char i;
 	unsigned char cs = 0;
@@ -368,4 +363,60 @@ uint8_t transportReceive(void* data)
 void transportPowerDown(void)
 {
 	// Nothing to shut down here
+}
+
+void transportPowerUp(void)
+{
+
+}
+void transportSleep(void)
+{
+
+}
+void transportStandBy(void)
+{
+
+}
+
+int16_t transportGetSendingRSSI(void)
+{
+	// not implemented
+	return INVALID_RSSI;
+}
+
+int16_t transportGetReceivingRSSI(void)
+{
+	// not implemented
+	return INVALID_RSSI;
+}
+
+int16_t transportGetSendingSNR(void)
+{
+	// not implemented
+	return INVALID_SNR;
+}
+
+int16_t transportGetReceivingSNR(void)
+{
+	// not implemented
+	return INVALID_SNR;
+}
+
+int16_t transportGetTxPowerPercent(void)
+{
+	// not implemented
+	return static_cast<int16_t>(100);
+}
+
+int16_t transportGetTxPowerLevel(void)
+{
+	// not implemented
+	return static_cast<int16_t>(100);
+}
+
+bool transportSetTxPowerPercent(const uint8_t powerPercent)
+{
+	// not possbile
+	(void)powerPercent;
+	return false;
 }

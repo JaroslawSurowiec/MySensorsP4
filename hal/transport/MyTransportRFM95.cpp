@@ -6,7 +6,7 @@
  * network topology allowing messages to be routed to nodes.
  *
  * Created by Henrik Ekblad <henrik.ekblad@mysensors.org>
- * Copyright (C) 2013-2016 Sensnology AB
+ * Copyright (C) 2013-2017 Sensnology AB
  * Full contributor list: https://github.com/mysensors/Arduino/graphs/contributors
  *
  * Documentation: http://www.mysensors.org
@@ -18,15 +18,17 @@
  *
  */
 
-#include "MyConfig.h"
-#include "MyTransport.h"
+#include "MyTransportHAL.h"
 #include "drivers/RFM95/RFM95.h"
 
 bool transportInit(void)
 {
 	const bool result = RFM95_initialise(MY_RFM95_FREQUENCY);
+#if defined(MY_RFM95_TCXO)
+	RFM95_enableTCXO();
+#endif
 #if !defined(MY_GATEWAY_FEATURE) && !defined(MY_RFM95_ATC_MODE_DISABLED)
-	// only enable ATC mode nodes
+	// only enable ATC mode in nodes
 	RFM95_ATCmode(true, MY_RFM95_ATC_TARGET_RSSI);
 #endif
 	return result;
@@ -42,8 +44,12 @@ uint8_t transportGetAddress(void)
 	return RFM95_getAddress();
 }
 
-bool transportSend(const uint8_t to, const void* data, const uint8_t len)
+bool transportSend(const uint8_t to, const void* data, const uint8_t len, const bool noACK)
 {
+	if (noACK) {
+		(void)RFM95_sendWithRetry(to, data, len, 0, 0);
+		return true;
+	}
 	return RFM95_sendWithRetry(to, data, len);
 }
 
@@ -59,34 +65,67 @@ bool transportSanityCheck(void)
 
 uint8_t transportReceive(void* data)
 {
-	return RFM95_recv((uint8_t*)data);
+	const uint8_t len = RFM95_recv((uint8_t*)data, MAX_MESSAGE_LENGTH);
+	return len;
 }
 
-void transportPowerDown(void)
+void transportSleep(void)
 {
 	(void)RFM95_sleep();
 }
 
-// experimental
-// **********************************************
-int16_t transportGetReceivingSignalStrength(void)
+void transportStandBy(void)
 {
-	return RFM95_getReceivingRSSI();
+	(void)RFM95_standBy();
 }
-int16_t transportGetSendingSignalStrength(void)
+
+void transportPowerDown(void)
+{
+	RFM95_powerDown();
+}
+
+void transportPowerUp(void)
+{
+	RFM95_powerUp();
+}
+
+void transportToggleATCmode(const bool OnOff, const int16_t targetRSSI)
+{
+	RFM95_ATCmode(OnOff, targetRSSI);
+}
+
+int16_t transportGetSendingRSSI(void)
 {
 	return RFM95_getSendingRSSI();
 }
-int8_t transportGetReceivingSNR(void)
+
+int16_t transportGetReceivingRSSI(void)
 {
-	return RFM95_getReceivingSNR();
+	return RFM95_getReceivingRSSI();
 }
-int8_t transportGetSendingSNR(void)
+
+int16_t transportGetSendingSNR(void)
 {
 	return RFM95_getSendingSNR();
 }
-uint8_t transportGetTxPower(void)
+
+int16_t transportGetReceivingSNR(void)
+{
+	return RFM95_getReceivingSNR();
+}
+
+int16_t transportGetTxPowerPercent(void)
 {
 	return RFM95_getTxPowerPercent();
 }
-// **********************************************
+
+int16_t transportGetTxPowerLevel(void)
+{
+	return RFM95_getTxPowerLevel();
+}
+
+bool transportSetTxPowerPercent(const uint8_t powerPercent)
+{
+	return RFM95_setTxPowerPercent(powerPercent);
+}
+
